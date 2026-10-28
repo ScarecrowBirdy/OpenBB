@@ -1,0 +1,99 @@
+# Asset-tool baseline — 2026-10-29
+
+This cleanup continues the fork from upstream commit
+`aedc3fcf2e27caad6005e5d1a0459e380a04b27f`. Its scope is the headless asset tools,
+not a language port, new graphics backend or completed game simulation.
+
+## Parsing and output contracts
+
+BOX parsing now fails on short headers/payloads, oversized signed lengths and
+unterminated fixed fields. It retains original case and raw metadata; lookup
+matches the game's first case-insensitive entry. Duplicate resources remain
+inspectable by index, but extraction rejects output collisions. Library parsing
+does not catch an error and return a partly initialized successful object.
+
+`unbox` exports the exact archive header and each raw entry header in its manifest,
+including unused padding. This permits byte-exact reconstruction; retaining only
+decoded strings would lose padding and other metadata. It does not restore
+filesystem timestamps, but preserves the eight SYSTEMTIME words in each raw
+header. It is an unpacker, not a full archive editor.
+
+MFB checks headers, versions 100/101, dimensions, frame extents and RLE boundaries;
+origins are signed. Decoded indexed pixels are exposed through `frameIndices()`.
+FAT validates directory and payload extents. PT parsing validates metadata before
+decoding compression 9. Bit reads now check actual consumption and avoid reading
+beyond EOF merely to prefetch lookahead. Output allocation follows the declared
+sample count instead of using a fixed four-million-byte WAV buffer. MFB indexed
+storage and M10 PCM are each capped at 256 MiB as a tool resource limit.
+
+All CLIs use explicit input/output arguments and a new destination directory.
+They reject path separators, invalid Windows characters, device names and
+case-insensitive collisions in output names. They do not derive destinations from
+stored source paths. Failures return nonzero; previously written output may remain.
+The decoder still contains inherited low-level pointer math: these checks do not
+constitute a comprehensive hostile-file security audit.
+
+## Regression evidence
+
+`tests/fixtures/corpus-hashes.json` contains names, sizes and hashes, not payloads.
+It was assembled from the independently audited original assets under the sibling
+`Decomp` investigation, plus an explicitly captured upstream audio baseline:
+
+| Evidence | Scope |
+|---|---|
+| Decomp `asset-audit.json` | 2,653 payload hashes; 624 MFB headers and 5,866 indexed-frame hashes |
+| Decomp `box-format-audit.json` | Whole-archive identity, checked against BBTools and exact repacking |
+| Decomp `audio-audit.json` | PT declared sample counts and FAT payload boundaries |
+| Upstream M10 implementation | 1,358 WAV hashes, built with DMD 2.111.0 after adding two required explicit switch fallthrough statements |
+
+The baseline audio capture precedes the PT/buffer/EOF changes. **1,354 WAV files
+remain byte-identical.** Four upstream outputs contained an additional sample:
+
+| Archive | Resource | Declared samples |
+|---|---|---:|
+| SPEECH2.BOX | Pf31.M10 | 45056 |
+| SPEECH2.BOX | Pik4.M10 | 24576 |
+| SPEECH2.BOX | Wiz6.M10 | 32768 |
+| SPEECH3.BOX | Pf31.M10 | 61440 |
+
+Each ends at an exact 4096-sample output-block boundary. The old decoder called
+`Decode()` again and emitted one sample before noticing the declared total had
+already been reached. The fixed decoder returns zero immediately when complete.
+For these four cases, the expected WAV was independently constructed from the
+upstream output by removing its last two bytes and updating only the RIFF/data
+length fields. Its hash exactly matched the fixed decoder, establishing that all
+retained PCM samples are unchanged. A synthetic 4096-sample regression covers it.
+
+These WAV comparisons establish preservation of the inherited decoder's behavior
+and correct container lengths, **not** acoustic or sample-perfect equivalence to
+the original game's audio implementation. That remains a live comparison target.
+
+The Python corpus runner checks generated PNG chunks, CRCs, dimensions, palette
+mapping, transparency conversion and sheet placement independently of the PNG
+writer. Indexed-frame expectations come from the earlier independent MFB audit.
+Current PNG color-key handling intentionally retains the upstream last-frame key;
+the `thumnail.MFB` per-frame discrepancy remains unresolved. Palette choices are
+the inherited export policy, not a claim about every runtime rendering context.
+
+The complete passing local run is recorded in `build/verification.json`. Its
+input-hash check covers all 13 BOX files and four FAT banks. The original files,
+BBTools, and the existing investigation fixtures were not modified by this cleanup.
+
+## Building and extending
+
+`build.ps1 -Bootstrap -Test` is the supported asset build. Subsequent builds use
+the cached compiler without network access. A compiler override must report the
+same pinned version. Native commands are checked immediately; a failed compiler
+or test cannot be masked by a later successful command.
+
+Synthetic tests exercise empty/truncated BOX cases, duplicate resolution, output
+names, signed MFB origins, versions, RLE errors, short PT headers, truncated speech
+and exact output-block termination. The optional real-corpus test checks the public
+APIs and all three executables. Rendering and simulation are excluded because their
+DSFML dependencies and prototype assumptions have not yet been reconciled.
+
+Unknown/non-ASCII archive names and PT extended tags are not established by the
+current corpus. Any new support should add focused fixtures and preserve the
+documented working edition. Do not refresh hashes simply to make failures pass.
+Record whether a changed expectation comes from executable evidence, an independent
+decoder, or an intentional implementation change.

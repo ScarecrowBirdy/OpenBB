@@ -4,6 +4,7 @@ import core.stdc.math;
 import std.file;
 import std.string;
 import std.stdio;
+import std.exception : enforce;
 
 import openbb.common;
 import openbb.io.palette;
@@ -26,8 +27,8 @@ private:
 		char[3] ver; // version, should be 101d (= 65h)
 		ushort width;  // width of a single image
 		ushort height; // height of a single image
-		ushort offsetx; // not used?
-		ushort offsety; // not used?
+		short offsetx; // signed sprite origin
+		short offsety;
 		EntryFlags flags; // some kind of flag byte
 		ushort numSprites;
 		
@@ -68,7 +69,15 @@ public:
 	 */
 	this(const ubyte[] data, bool isMaptile = false)
 	{
+		enforce(data.length >= Header.sizeof, "Truncated MFB header");
 		_header = *cast(Header*) data;
+		checkHeader();
+		enforce(_header.ver == "100" || _header.ver == "101", "Unsupported MFB version");
+		enforce(_header.width > 0 && _header.height > 0 &&
+			_header.width <= 32767 && _header.height <= 32767 && _header.numSprites > 0,
+			"Invalid MFB dimensions/frame count");
+		enforce(cast(ulong)_header.width * _header.height * _header.numSprites <= 256UL*1024*1024,
+			"MFB exceeds decoded pixel limit (256 MiB)");
 
 		uint pos = Header.sizeof;
 		
@@ -82,6 +91,7 @@ public:
 		{
 			if((_header.flags & EntryFlags.Compressed) == 0) // not compressed
 			{
+				enforce(spriteSize <= data.length-pos, "Truncated raw MFB frame");
 				_transparencyColor = data[pos];
 				
 				// if it's maptile.mfb, skip the first 5 rows since they are empty
@@ -92,7 +102,9 @@ public:
 			}
 			else // RLE compressed
 			{
+				enforce(data.length-pos >= 4, "Missing MFB frame length");
 				uint size = *cast(uint*) (data.ptr + pos); pos += 4;
+				enforce(size > 0 && size <= data.length-pos, "Invalid MFB frame length");
 				_transparencyColor = data[pos];
 				unRLE(data[pos .. pos + size], _spriteData[i]);
 				pos += size;
@@ -178,15 +190,19 @@ public:
 	 */
 	void unRLE(const ubyte[] input, ubyte[] output)
 	{
+		enforce(input.length > 0, "Empty MFB RLE frame");
 		uint inPos = 0, outPos = 0;
 		ubyte copyByte = input[0];
 				
 		while (outPos < output.length)
 		{
+			enforce(inPos < input.length, "MFB RLE underflow");
 			if (input[inPos] == copyByte)
 			{
+				enforce(inPos+1 < input.length, "Missing MFB RLE count");
 				ubyte count = input[++inPos];
 				++inPos;
+				enforce(count <= output.length-outPos, "MFB RLE overflow");
 
 				while (count--)
 					output[outPos++] = copyByte;
@@ -200,11 +216,19 @@ public:
 	
 	@property
 	{
+		short originX() const { return _header.offsetx; }
+		short originY() const { return _header.offsety; }
 		uint spriteSheetWidth()	{return _spriteSheetWidth;}
 		uint spriteSheetHeight(){return _spriteSheetHeight;}
 		ushort width()			{return _header.width;} /// width property
 		ushort height()			{return _header.height;} /// height property
 		ushort numSprites()		{return _header.numSprites;} /// getter
 		ushort flags()			{return _header.flags;} /// flags getter
+	}
+	/// Indexed pixels before palette/alpha conversion, for inspection and regression.
+	const(ubyte)[] frameIndices(size_t index) const
+	{
+		enforce(index < _spriteData.length, "MFB frame index out of range");
+		return _spriteData[index];
 	}
 }

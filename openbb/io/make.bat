@@ -1,1 +1,3 @@
-dmd m10file.d cppver.obj -debug -g -unittest && cv2pdb -D2 m10file.exe
+@echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\..\build.ps1" -Test %*
+exit /b %errorlevel%

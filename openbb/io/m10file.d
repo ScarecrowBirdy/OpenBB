@@ -4,6 +4,7 @@
 module openbb.io.m10file;
 
 import std.stdio;
+import std.exception : enforce;
 
 private
 {
@@ -71,78 +72,36 @@ static uint readBytes(const(ubyte)[] input)
 class M10File
 {
 protected:
-	uint parsePTHeader(const(ubyte)[] input)
-	{
-		// check magic
-		if (input[0..2] != "PT")
-			throw new Exception("No PT file!");
-
-		uint idx = 4; // seek 2 from current
-
-		// Data offset
-		uint DataOffset;
-		DataOffset = *cast(uint*) input[idx..idx+4];
-		idx += 4;
-
-		// Read in the header (code borrowed from Valery V. Anisimovsky (samael@avn.mccme.ru) )
-		uint CompressionType;
-		ubyte b;
-		bool bInHeader;
-		bool bInSubHeader;
-
-		bInHeader = true;
-		while (bInHeader)
-		{
-			b = input[idx++];
-
-			switch (b) // parse header code
-			{
-			case 0xFF: // end of header
-				bInHeader = false;
-			case 0xFE: // skip
-			case 0xFC: // skip
-				break;
-			case 0xFD: // subheader starts...
-				bInSubHeader = true;
-				while (bInSubHeader)
-				{
-					b = input[idx++];
-					switch (b) // parse subheader code
-					{
-					case 0x83:
-						b = input[idx++];
-						CompressionType = readBytes(input[idx..idx+b]);
-						idx += b;
-						break;
-					case 0x85:
-						b = input[idx++];
-						_TotalSampleCount = readBytes(input[idx..idx+b]);
-						idx += b;
-						break;
-					case 0xFF:
-						break;
-					case 0x8A: // end of subheader
-						bInSubHeader = false;
-					default: // ???
-						b = input[idx++];
-						idx += b; // seek cur
-					}
-				}
-				break;
-			default:
-				b = input[idx++];
-				if (b == 0xFF)
-					idx += 4;
-				idx += b;
-			}
-		}
-
-		// Print some things out
-		writefln("Compression: %d", CompressionType);
-
-		// Seek to the data offset
-		return DataOffset;
-	}
+    uint parsePTHeader(const(ubyte)[] input)
+    {
+        enforce(input.length >= 8 && input[0..2] == cast(ubyte[])"PT", "Invalid PT header");
+        uint offset = cast(uint)input[4] | (cast(uint)input[5]<<8) |
+            (cast(uint)input[6]<<16) | (cast(uint)input[7]<<24);
+        enforce(offset >= 8 && offset < input.length, "PT data offset outside input");
+        uint pos = 8, compression;
+        bool ended, samples;
+        // Tagged numeric values are big-endian; the data offset above is LE.
+        // Header parsing attribution: Valery V. Anisimovsky (upstream source).
+        while (pos < offset) {
+            auto tag = input[pos++];
+            if (tag == 0xff) { ended = true; break; }
+            if (tag == 0xfc || tag == 0xfd || tag == 0xfe) continue;
+            enforce(pos < offset, "Missing PT tag length");
+            auto length = input[pos++];
+            enforce(length != 0xff && length <= offset-pos, "Unsupported/truncated PT tag");
+            if (tag == 0x83 || tag == 0x85) {
+                enforce(length > 0 && length <= 4, "Invalid PT numeric tag");
+                uint value;
+                foreach (v; input[pos..pos+length]) value = (value<<8) | v;
+                if (tag == 0x83) compression = value;
+                else { _TotalSampleCount = value; samples = true; }
+            }
+            pos += length;
+        }
+        enforce(ended && samples && compression == 9, "Missing PT metadata or unsupported compression");
+        enforce(_TotalSampleCount <= 128*1024*1024, "Speech exceeds 256 MiB PCM limit");
+        return offset;
+    }
 
 private:
 	uint	_SampleBufferOffset; // TODO: size_t was c++ size_t
@@ -150,81 +109,42 @@ private:
 	uint	_TotalSampleCount;
 
 public:
-	this(const(ubyte)[] input)
-	{
-//		Clear();
+    this(const(ubyte)[] input)
+    {
+        uint idx = parsePTHeader(input);
+        _input = input;
+        _currentBits = input[idx];
+        _compressedData = input.ptr+idx+1;
+        _end = input.ptr+input.length;
+        _bitCount = 8;
+        _firstBit = getBits(1);
+        _second4Bits = 32-getBits(4);
+        _floatTable[0] = (getBits(4)+1)*8.0;
+        float ST1 = 1.04+(getBits(6)*0.001);
+        foreach (i; 0..63) _floatTable[i+1] = _floatTable[i]*ST1;
+        _table1 = 0; _table2 = 0; _bigTable = 0;
+        _SampleBufferOffset = 432;
+        _SamplesDecodedSoFar = 0;
+    }
 
-		uint idx;
-
-		if (input.length < 1)
-		{
-			writeln("Empty file.");
-			return;
-		}
-
-		// Read the PT header
-		idx = parsePTHeader(input);
-
-		// Load the file in
-		size_t DataSize;
-		DataSize = input.length - idx;
-		
-		writefln("Total sample count: %d", _TotalSampleCount);
-
-		// Initialize the decoder
-		try
-		{
-			_currentBits	= input[idx];
-			_compressedData = input.ptr+idx+1;
-			_bitCount		= 8;
-			
-			_firstBit		= getBits(1);
-			_second4Bits	= 32 - getBits(4);
-			
-			_floatTable[0] = (getBits(4) + 1) * 8.0;
-
-			float ST1 = 1.04 + (getBits(6) * 0.001);
-			
-			for (uint i = 0; i < 63; i++)
-				_floatTable[i+1] = _floatTable[i] * ST1;
-			
-			_table1 = 0;
-			_table2 = 0;
-			_bigTable = 0;
-		}
-		catch (Exception e)
-		{
-			writefln("The decoder could not be initialized (bug in program). %s", e.toString());
-		}
-		_SampleBufferOffset = 432;
-		_SamplesDecodedSoFar = 0;
-		return;
-	}
-	
 	//! returns content as wav
-	ubyte[] toWav()
-	{
-		auto Output = new ubyte[4_000_000];
-		
-		PrepareWaveHeader(Output);
+    ubyte[] toWav()
+    {
+        enforce(_SamplesDecodedSoFar == 0, "Decode WAV from a fresh M10File instance");
+        auto output = new ubyte[44+cast(size_t)_TotalSampleCount*2];
+        short[4096] samples;
+        size_t pos = 44;
+        while (_SamplesDecodedSoFar < _TotalSampleCount) {
+            auto count = Decode(samples);
+            enforce(count > 0, "Speech decoder made no progress");
+            output[pos..pos+count*2] = (cast(ubyte[])samples[])[0..count*2];
+            pos += count*2;
+        }
+        WriteWaveHeader(output,22050,16,1,_TotalSampleCount);
+        return output;
+    }
+    @property uint sampleCount() const { return _TotalSampleCount; }
 
-		short[4096] Samples;
-		uint Decoded;
-		uint SampleCount = 0;
-		uint idx = 44; // size of WAV headers
-		do
-		{
-			Decoded = Decode(Samples);
-
-			Output[idx..idx+Decoded*2] = (cast(ubyte*) Samples)[0.. Decoded * 2];
-			idx += Decoded*2;
-			SampleCount += Decoded;
-		} while (Decoded == 4096);
-
-		WriteWaveHeader(Output, 22050, 16, 1, SampleCount);
-		return Output[0 .. idx];
-	}
-	
 	union mtFloatInt
 	{
 		float Float;
@@ -233,7 +153,7 @@ public:
 	//! decodes a block, returns number of samples written
 	uint Decode(short[] OutputBuffer)
 	{
-		if (!_TotalSampleCount)
+		if (_SamplesDecodedSoFar >= _TotalSampleCount)
 		{
 			return 0;
 		}
@@ -245,15 +165,7 @@ public:
 
 			if (_SampleBufferOffset >= 432)
 			{
-				try
-				{
-					mtDecodeBlock();
-				}
-				catch (Exception e)
-				{
-					writeln("The decoder encountered a problem (bug in program). " ~ e.toString());
-					return i;
-				}
+                mtDecodeBlock();
 				_SampleBufferOffset = 0;
 			}
 
@@ -286,7 +198,9 @@ public:
 	}
 
 private:
-	const(ubyte)*_compressedData;// 0
+	const(ubyte)[] _input; // keep source storage alive during pointer-based decoding
+    const(ubyte)* _end;
+    const(ubyte)*_compressedData;// 0
 	uint		_currentBits;	// 4
 	uint		_bitCount;		// 8
 	uint		_firstBit;		// C
@@ -576,11 +490,13 @@ private:
 	//! reads count bits from the input stream (the _compressedData member) and returns them
 	uint getBits(uint count)
 	{
+        enforce(count <= 8 && count <= _bitCount, "Truncated M10 bitstream");
 		uint res = _currentBits & bitmask_lookup_table[count];
 		_bitCount -= count;
 		_currentBits >>= count; // note: count only byte!
 		
-		if (_bitCount < 8)
+		// Keep lookahead when available; do not read past EOF just to prefetch.
+		if (_bitCount < 8 && _compressedData < _end)
 		{
 			_currentBits |= _compressedData[0] << _bitCount;
 			_compressedData++;
@@ -592,10 +508,12 @@ private:
 	//! skip count bits
 	void skipBits(uint count)
 	{
+        enforce(count <= _bitCount, "Truncated M10 bitstream");
 		_bitCount -= count;
 		_currentBits >>= count;
 
-		if (_bitCount < 8)
+		// Keep lookahead when available; do not read past EOF just to prefetch.
+		if (_bitCount < 8 && _compressedData < _end)
 		{
 			_currentBits |= _compressedData[0] << _bitCount;
 			_compressedData++;

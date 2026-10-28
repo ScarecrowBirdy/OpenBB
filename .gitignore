@@ -1,0 +1,15 @@
+/.tools/
+/build/
+/bin/
+/.dub/
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.map
+*.log
+*.BOX
+*.FAT
+*.wav
+*.png
+__pycache__/

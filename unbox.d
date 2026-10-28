@@ -1,23 +1,33 @@
 module unbox;
-
 import openbb.io.boxfile;
-
-import std.stdio;
-
-int main(string[] args)
-{
-	writef("Beasts and Bumpkins UnBOX v1.0\nCopyright (c) 2008 Trass3r.\n\n");
-	if (args.length < 2)
-	{
-		Usage();
-		return -1;
-	}
-	auto file = new BOXFile(args[1]);
-	file.extractAll();
-	return 0;
-}
-
-void Usage()
-{
-	writef("Usage:\nUnBOX filename\n");
+import openbb.tools.cli;
+import std.file : mkdir, write;
+import std.stdio : writeln, stderr;
+import std.json;
+import std.digest.sha;
+import std.string : toLower;
+int main(string[] args) {
+    if (help(args)) return 0;
+    try {
+        auto o = options(args);
+        auto box = new BOXFile(o.input);
+        validateNames(box.fileList() ~ ["_box_manifest.json"]);
+        mkdir(o.output);
+        JSONValue[] entries;
+        foreach (i; 0..box.numFiles) {
+            auto name = box.entryName(i); auto data = box[i];
+            write(outputPath(o,name),data);
+            JSONValue e = JSONValue.emptyObject;
+            e["index"] = i; e["name"] = name; e["path"] = box.entryPath(i);
+            e["header_hex"] = toLower(toHexString(box.entryHeader(i)));
+            e["bytes"] = data.length; e["sha256"] = toLower(toHexString(sha256Of(data)));
+            entries ~= e;
+        }
+        JSONValue m = JSONValue.emptyObject;
+        m["archive_header_hex"] = toLower(toHexString(box.archiveHeader()));
+        m["entries"] = JSONValue(entries);
+        write(outputPath(o,"_box_manifest.json"),m.toPrettyString());
+        writeln("Extracted ",box.numFiles," entries to ",o.output);
+        return 0;
+    } catch (Exception e) { stderr.writeln(e.msg); return 1; }
 }

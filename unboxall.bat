@@ -1,5 +1,3 @@
-mfbdecoder VIDEO.BOX
-unbox MISC.BOX
-unbox MISSIONS.BOX
-unbox MISTEXT0.BOX
-m10decoder SPEECH0.BOX
+@echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\unbox-all.ps1" %*
+exit /b %errorlevel%

@@ -1,42 +1,25 @@
-/**
- *	this creates a command-line tool to convert m10 to wave files
- */
 module m10decoder;
-
 import openbb.io.boxfile;
 import openbb.io.m10file;
-
-import std.stdio;
-import std.file;
-import std.datetime.systime;
-import std.datetime.date;
-
-int main(string[] args)
-{
-	if (args.length != 2)
-	{
-		writeln("Beasts and Bumpkins .m10 Decoder");
-		writeln("Usage: " ~ args[0] ~ " {SPEECHx.BOX}");
-		return 1;
-	}
-
-	string inputFilename = args[1];
-
-	auto speechbox = new BOXFile(inputFilename);
-	if (!exists(inputFilename[0 .. $-4]))
-		mkdir(inputFilename[0 .. $-4]);
-	chdir(inputFilename[0 .. $-4]);
-
-	for (uint i=0; i<speechbox.numFiles; i++)
-	{
-		string outFilename = speechbox.entryName(i)[0 .. $-4] ~ ".wav";
-		writeln(outFilename);
-		auto m10 = new M10File(speechbox[i]);
-		std.file.write(outFilename, m10.toWav());
-		auto date = speechbox.entryDate(i);
-		SysTime modificationTime = SysTime(DateTime(date.year, date.month, date.day,
-			date.hour, date.minute, date.second));
-		setTimes(outFilename, modificationTime, modificationTime);
-	}
-	return 0;
+import openbb.tools.cli;
+import std.file : mkdir, write;
+import std.path : extension, stripExtension;
+import std.string : toLower;
+import std.stdio : writeln, stderr;
+import std.exception : enforce;
+int main(string[] args) {
+    if (help(args)) return 0;
+    try {
+        auto o = options(args); auto box = new BOXFile(o.input);
+        string[] names;
+        foreach (name; box.fileList()) {
+            enforce(toLower(extension(name)) == ".m10", "Expected only M10 resources");
+            names ~= stripExtension(name) ~ ".wav";
+        }
+        validateNames(names); mkdir(o.output);
+        foreach (i; 0..box.numFiles)
+            write(outputPath(o,names[i]),new M10File(box[i]).toWav());
+        writeln("Decoded ",box.numFiles," speech files to ",o.output);
+        return 0;
+    } catch (Exception e) { stderr.writeln(e.msg); return 1; }
 }
