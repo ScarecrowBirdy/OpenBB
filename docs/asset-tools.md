@@ -1,4 +1,4 @@
-# Asset-tool baseline — 2026-10-29
+# Asset-tool verification — 2026-10-29
 
 This cleanup continues the fork from upstream commit
 `aedc3fcf2e27caad6005e5d1a0459e380a04b27f`. Its scope is the headless asset tools,
@@ -8,8 +8,9 @@ not a language port, new graphics backend or completed game simulation.
 
 BOX parsing now fails on short headers/payloads, oversized signed lengths and
 unterminated fixed fields. It retains original case and raw metadata; lookup
-matches the game's first case-insensitive entry. Duplicate resources remain
-inspectable by index, but extraction rejects output collisions. Library parsing
+uses first-match ASCII case folding for the established game filenames. Unknown
+code-page bytes are retained without attempting UTF-8 decoding. Duplicate
+resources remain inspectable by index, but extraction rejects output collisions. Library parsing
 does not catch an error and return a partly initialized successful object.
 
 `unbox` exports the exact archive header and each raw entry header in its manifest,
@@ -24,7 +25,8 @@ FAT validates directory and payload extents. PT parsing validates metadata befor
 decoding compression 9. Bit reads now check actual consumption and avoid reading
 beyond EOF merely to prefetch lookahead. Output allocation follows the declared
 sample count instead of using a fixed four-million-byte WAV buffer. MFB indexed
-storage and M10 PCM are each capped at 256 MiB as a tool resource limit.
+storage, each RGBA output allocation, and M10 PCM are capped at 256 MiB as tool
+resource limits; these are not aggregate process-memory limits.
 
 All CLIs use explicit input/output arguments and a new destination directory.
 They reject path separators, invalid Windows characters, device names and
@@ -71,9 +73,14 @@ the original game's audio implementation. That remains a live comparison target.
 The Python corpus runner checks generated PNG chunks, CRCs, dimensions, palette
 mapping, transparency conversion and sheet placement independently of the PNG
 writer. Indexed-frame expectations come from the earlier independent MFB audit.
-Current PNG color-key handling intentionally retains the upstream last-frame key;
-the `thumnail.MFB` per-frame discrepancy remains unresolved. Palette choices are
-the inherited export policy, not a claim about every runtime rendering context.
+Milestone 3 corrects the shared last-frame color key using executable evidence:
+raw frames use their own first pixel; compressed frames share the first decoded
+frame's first pixel. The only affected retail sprite sheet is `thumnail.MFB`
+(224 pixel alpha changes across its 33 frames). Indexed pixels and palettes are
+unchanged. The independent PNG oracle now checks that explicit policy; synthetic
+fixtures distinguish first, last, per-frame and RLE-marker keys. See
+[format contracts and addresses](asset-formats.md#mfb-sprites).
+Palette choices remain the inherited export policy, not every runtime context.
 
 The complete passing local run is recorded in `build/verification.json`. Its
 input-hash check covers all 13 BOX files and four FAT banks. The original files,
@@ -88,12 +95,35 @@ or test cannot be masked by a later successful command.
 
 Synthetic tests exercise empty/truncated BOX cases, duplicate resolution, output
 names, signed MFB origins, versions, RLE errors, short PT headers, truncated speech
-and exact output-block termination. The optional real-corpus test checks the public
+and exact output-block termination. Milestone 3 adds all-prefix truncation checks,
+BOX reload atomicity and unknown name bytes, MFB frame/sheet alpha checks, FAT
+metadata and odd sample lengths, PT chunk-size independence and malformed history
+references. The corpus runner also checks unsafe CLI names, existing destinations,
+and conversion failures without successful partial PNG/WAV files. The optional real-corpus test checks the public
 APIs and all three executables. Rendering and simulation are excluded because their
 DSFML dependencies and prototype assumptions have not yet been reconciled.
 
-Unknown/non-ASCII archive names and PT extended tags are not established by the
-current corpus. Any new support should add focused fixtures and preserve the
+Native case folding for non-ASCII archive names and PT extended tags are not
+established by the current corpus. Any new support should add focused fixtures and preserve the
 documented working edition. Do not refresh hashes simply to make failures pass.
 Record whether a changed expectation comes from executable evidence, an independent
 decoder, or an intentional implementation change.
+
+## Milestones 2 and 3 validation
+
+The library now lives under `source/`; all supported builds pass `-Isource`.
+Tools are separate entry points under `tools/`. Graphical examples are preserved
+under `examples/`, with imports updated for `openbb.world.*`. Their old graphics
+API is still outside the supported build; no graphical compile/run is claimed.
+
+BOX failed reloads preserve the previous archive. MFB and FAT headers use explicit
+little-endian reads rather than struct/pointer casts. FAT payloads and directory
+metadata can be inspected independently of signed 16-bit sample interpretation.
+An odd byte count fails only when requesting 16-bit samples.
+
+The M10 history lookup now selects from explicit history/sample arrays instead of
+walking a pointer across adjacent class members. An invalid first-block lag throws
+before unsigned subtraction. All 1,358 WAV hashes still match the committed
+milestone 1 expectations; no audio baselines were regenerated. Other inherited
+codec arithmetic remains unchanged and is not claimed to have received a complete
+security audit or an original-game acoustic comparison.

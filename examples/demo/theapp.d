@@ -1,4 +1,4 @@
-module openbb.theapp;
+module theapp;
 //import TileSystem;
 
 

@@ -1,7 +1,7 @@
 /**
  *	
  */
-module openbb.entity;
+module openbb.world.entity;
 
 import openbb.graphics.animation;
 import dsfml.graphics.irendertarget;

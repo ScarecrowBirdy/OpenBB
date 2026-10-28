@@ -2,7 +2,6 @@
 module openbb.io.boxfile;
 import std.exception : enforce;
 import std.file : read;
-import std.string : toLower;
 import std.stdio : File;
 import std.algorithm.searching : countUntil;
 
@@ -19,7 +18,20 @@ final class BOXFile {
     private size_t[string] _names;
     this(string filename) { _filename = filename; readArchive(); }
     this(const(ubyte)[] bytes) { _data = bytes.dup; parse(); }
-    void readArchive() { _data = cast(ubyte[])read(_filename); parse(); }
+    // A failed reload must not replace a previously valid archive with a prefix.
+    void readArchive() {
+        auto replacement = new BOXFile(cast(ubyte[])read(_filename));
+        _data = replacement._data;
+        _entries = replacement._entries;
+        _names = replacement._names;
+    }
+    // BOX fields are byte strings, not guaranteed UTF-8. Fold the established
+    // ASCII names without corrupting or attempting to decode unknown code pages.
+    private static string nameKey(string name) {
+        auto key = name.dup;
+        foreach (ref c; key) if (c >= 'A' && c <= 'Z') c += 'a'-'A';
+        return key.idup;
+    }
     private uint number(size_t at, size_t width) const {
         uint value;
         foreach (i; 0 .. width) value |= cast(uint)_data[at+i] << (8*i);
@@ -46,14 +58,14 @@ final class BOXFile {
                 cast(ushort)number(pos+520,2), cast(ushort)number(pos+522,2),
                 cast(ushort)number(pos+524,2), cast(ushort)number(pos+526,2));
             e.headerOffset = pos; e.offset = pos+532; e.size = size;
-            auto key = toLower(e.name);
+            auto key = nameKey(e.name);
             // Original game: first case-insensitive match wins.
             if (!(key in _names)) _names[key] = _entries.length;
             _entries ~= e; pos += 532+size;
         }
     }
     const(ubyte)[] opIndex(string name) const {
-        auto index = toLower(name) in _names;
+        auto index = nameKey(name) in _names;
         enforce(index !is null, "BOX entry not found: " ~ name);
         return this[*index];
     }
@@ -66,11 +78,15 @@ final class BOXFile {
         foreach (e; _entries) result ~= e.name;
         return result;
     }
-    string entryName(size_t index) const { return _entries[index].name; }
-    string entryPath(size_t index) const { return _entries[index].path; }
-    EntryTime entryDate(size_t index) const { return _entries[index].time; }
+    private void checkIndex(size_t index) const {
+        enforce(index < _entries.length, "BOX entry index out of range");
+    }
+    string entryName(size_t index) const { checkIndex(index); return _entries[index].name; }
+    string entryPath(size_t index) const { checkIndex(index); return _entries[index].path; }
+    EntryTime entryDate(size_t index) const { checkIndex(index); return _entries[index].time; }
     const(ubyte)[] archiveHeader() const { return _data[0..8]; }
     const(ubyte)[] entryHeader(size_t index) const {
+        checkIndex(index);
         auto pos = _entries[index].headerOffset; return _data[pos .. pos+532];
     }
     @property size_t numFiles() const { return _entries.length; }

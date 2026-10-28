@@ -65,8 +65,8 @@ To unpack every archive in a directory, with one subdirectory per BOX:
 
 `unboxall.bat INPUT_DIRECTORY NEW_OUTPUT_DIRECTORY` provides the same operation.
 The previous batch script's mixed conversion/extraction commands have been replaced
-by explicit tools. The old `openbb/io/make.bat` now forwards to the supported build
-and tests; it no longer requires the absent `cppver.obj` or `cv2pdb`.
+by explicit tools. The secondary wrapper is now `source/openbb/io/make.bat`; it
+forwards to the supported build and tests without `cppver.obj` or `cv2pdb`.
 
 ## Verify against your game files
 
@@ -93,17 +93,26 @@ the four corrected speech-boundary cases, and limits of the current evidence.
 
 ## Development direction
 
-- `openbb/io/`: asset readers and decoders shared by tools and future engine work.
-- `openbb/tools/`: CLI output policy; extraction is separate from archive parsing.
+- `source/openbb/io/`: BOX, MFB, FAT, M10, palette and PNG support.
+- `source/openbb/graphics/`: inherited rendering and animation code.
+- `source/openbb/world/`: inherited map and entity classes.
+- `source/openbb/tools/`: shared CLI argument and destination policy.
+- `tools/`: extraction/conversion entry points and build support scripts.
+- `examples/`: preserved DSFML demo and sprite viewer, outside the verified build.
 - `tests/`: synthetic tests, optional corpus harness and hashes, without game assets.
-- `main.d`, `spriteviewer.d`, `openbb/graphics/`, map/entity classes: inherited
-  graphical prototype, not included in the verified asset-tool build.
-- `.tools/`, `bin/`, `build/`: ignored local compiler, programs and generated output.
+- `docs/`: architecture, format contracts and verification evidence.
+- `.tools/`, `bin/`, `build/`: ignored compiler, executables and generated output.
 
-Keep the existing source layout while the build is stabilized. The next milestone
-is real `.mis`/`.sav` loading and static rendering, followed by simulation driven
-by explicit ticks. Recovered behavior should be tracked separately from prototype
-assumptions; see [contribution notes](CONTRIBUTING.md).
+Cleanup milestones 2 and 3 are complete: sources are organized for continued
+work, parser boundaries are checked, and the full local corpus passes. MFB alpha
+conversion now follows the surface color-key setup recovered from the executable;
+all indexed-frame and WAV hashes remain unchanged from milestone 1.
+
+See [architecture and remaining work](docs/architecture.md),
+[asset format contracts](docs/asset-formats.md), and
+[contribution notes](CONTRIBUTING.md). The next cleanup milestone is separating
+simulation state from DSFML and advancing animation through explicit ticks.
+Real `.mis`/`.sav` loading and a static renderer remain future engine work.
 
 Upstream copyright and GPL-3.0-or-later notice are preserved in [LICENSE](LICENSE).
 Decoder attribution and evidence sources are recorded in [NOTICE.md](NOTICE.md).

@@ -1,7 +1,7 @@
 /**
  *	
  */
-module openbb.tile;
+module openbb.world.tile;
 
 import dsfml.graphics.sprite;
 

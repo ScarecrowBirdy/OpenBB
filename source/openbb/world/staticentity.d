@@ -1,10 +1,10 @@
 /**
  *	
  */
-module openbb.staticentity;
+module openbb.world.staticentity;
 
 import dsfml.system.vector;
-import openbb.entity;
+import openbb.world.entity;
 
 
 ///

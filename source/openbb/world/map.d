@@ -1,11 +1,11 @@
 /**
  *	
  */
-module openbb.map;
+module openbb.world.map;
 
-import openbb.layer;
-import openbb.tile;
-import openbb.entity;
+import openbb.world.layer;
+import openbb.world.tile;
+import openbb.world.entity;
 
 import dsfml.graphics.rect;
 import dsfml.graphics.renderwindow;

@@ -240,7 +240,9 @@ private:
 
 		for (uint i = 216; i < 648; i += 108)
 		{
-			uint BigTableIndex = i - getBits(8);
+			auto lag = getBits(8);
+			enforce(lag <= i, "Speech history reference precedes buffer");
+			uint BigTableIndex = i - lag;
 
 			float someFloat = getBits(4) * 2.0f / 30.0f; // * 0.0666666666666666666
 			float someOtherFloat = _floatTable[getBits(6)];
@@ -276,22 +278,17 @@ private:
 				}
 			}
 
-			float* BigTablePtr = _bigTable.ptr + BigTableIndex;
-			
+			// The inherited pointer walked from history into the adjacent sample
+			// member. Express that logical window without depending on class layout.
 			for (ubyte k = 0; k < 108; k++)
 			{
-				*curSampleBufPtr = someOtherFloat * tableB[k + 5] + someFloat * BigTablePtr[k];
+				auto historyIndex = BigTableIndex + k;
+				auto history = historyIndex < _bigTable.length ? _bigTable[historyIndex]
+					: _sampleBuffer[historyIndex - _bigTable.length];
+				*curSampleBufPtr = someOtherFloat * tableB[k + 5] + someFloat * history;
 				curSampleBufPtr++;
 			}
 
-			/*
-			for (uint k = 0; k < 108; k++)
-			{
-				float tmp = someOtherFloat * tableB[k + 5];
-				float tmp2 = someFloat * _bigTable[BigTableIndex + k];
-				*curSampleBufPtr = tmp + tmp2;
-				curSampleBufPtr++;
-			}*/
 		}
 
 		_bigTable[0 .. 324] = _sampleBuffer[108 .. 432];

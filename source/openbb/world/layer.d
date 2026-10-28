@@ -1,9 +1,9 @@
 /**
  *	
  */
-module openbb.layer;
+module openbb.world.layer;
 
-import openbb.entity;
+import openbb.world.entity;
 
 
 ///

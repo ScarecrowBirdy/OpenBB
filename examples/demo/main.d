@@ -11,14 +11,14 @@ import dsfml.audio.sound;
 //import dsfml.network.all;
 
 import openbb.common;
-import openbb.dynamicentity;
+import openbb.world.dynamicentity;
 import openbb.graphics.animation;
 //import openbb.graphics.gui;
 import openbb.io.palette;
 import openbb.io.boxfile;
 import openbb.io.fatfile;
 import openbb.io.mfbfile;
-import openbb.map;
+import openbb.world.map;
 //import openbb.lua;
 import std.perf;
 //import openbb.quadtree;

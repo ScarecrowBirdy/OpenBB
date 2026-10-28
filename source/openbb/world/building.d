@@ -1,12 +1,12 @@
 /**
  *	
  */
-module openbb.building;
+module openbb.world.building;
 
 import dsfml.graphics.renderwindow;
 import dsfml.system.vector;
 import openbb.graphics.animation;
-import openbb.staticentity;
+import openbb.world.staticentity;
 
 ///
 class Building : StaticEntity

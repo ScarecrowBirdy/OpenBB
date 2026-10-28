@@ -65,7 +65,7 @@ def indexed_frames(data):
 
 def palette_tables():
     # Independent PNG comparison uses the established palette tables, not PNG output.
-    source=(ROOT/'openbb/io/palette.d').read_text()
+    source=(ROOT/'source/openbb/io/palette.d').read_text()
     result={}
     for name,body in re.findall(r'(\w+) = \(cast\(RGBA\*\) cast\(ubyte\[\]\) \[(.*?)\]',source,re.S):
         raw=bytes(int(v,16) for v in re.findall(r'0x([0-9A-Fa-f]{2})',body))
@@ -81,10 +81,10 @@ def check_sprite_sheet(png, mfb, name, palettes):
     stem=Path(name).stem.lower()
     loading={'m1back','m2back','m3back','m4back','m5back','m7back','m9back','m11back','loading','credits','yakoff'}
     palette=palettes['LOADINGPALETTE' if stem in loading else 'MISSIONPALETTE' if stem=='mission' else 'PALETTE']
-    # Preserve the inherited last-frame colour key for this milestone. Its fidelity
-    # to the game remains a separate live-comparison question (notably thumnail.MFB).
-    key=frames[-1][0]
-    rgba=[b''.join(b'\0\0\0\0' if flags&1 and p==key else palette[p] for p in f) for f in frames]
+    # Native surfaces: raw frames each get a key; compressed frames share the
+    # initial decoded surface key. See docs/asset-formats.md for code evidence.
+    rgba=[b''.join(b'\0\0\0\0' if flags&1 and p==(frames[0][0] if flags&2 else f[0])
+                   else palette[p] for p in f) for f in frames]
     empty=b'\xff\0\xff\xff'*(width*height)
     expected=bytearray()
     for row in range(rows):
@@ -94,9 +94,41 @@ def check_sprite_sheet(png, mfb, name, palettes):
                 expected.extend(frame[y*width*4:(y+1)*width*4])
     assert actual==expected,name
 
+def check_cli_failures(output):
+    """Exercise complete executables: bad resources must not become valid output."""
+    def archive(name, payload):
+        name = name.encode('ascii')
+        return (b'BOX\0\0\0\1\0' + name + bytes(256-len(name)) + bytes(272)
+                + struct.pack('<I',len(payload)) + payload)
+
+    cases = [('unbox','../escape',b'x'),
+             ('mfbdecoder','../escape.mfb',b'MFB'),
+             ('m10decoder','../escape.m10',b'PT')]
+    for tool,name,payload in cases:
+        source=output/f'unsafe-{tool}.box';source.write_bytes(archive(name,payload))
+        destination=output/f'unsafe-{tool}'
+        run(ROOT/f'bin/{tool}.exe',source,destination,ok=False)
+        assert not destination.exists(), 'Unsafe name must fail before mkdir'
+
+    pt=b'PT\0\0'+struct.pack('<I',19)+bytes([0xfd,0x83,1,9,0x85,2,0x10,0,0x8a,0,0xff])+bytes(2)
+    for tool,name,payload in [('mfbdecoder','broken.mfb',b'MFB'),
+                              ('m10decoder','broken.m10',pt)]:
+        source=output/f'truncated-{tool}.box';source.write_bytes(archive(name,payload))
+        destination=output/f'truncated-{tool}'
+        run(ROOT/f'bin/{tool}.exe',source,destination,ok=False)
+        assert not list(destination.iterdir()), 'Decoder failure produced an output file'
+
+    # All programs must refuse an existing directory without changing its contents.
+    destination=output/'existing';destination.mkdir()
+    sentinel=destination/'sentinel';sentinel.write_bytes(b'keep me')
+    for tool,name in [('unbox','safe'),('mfbdecoder','safe.mfb'),('m10decoder','safe.m10')]:
+        source=output/f'existing-{tool}.box';source.write_bytes(archive(name,b''))
+        run(ROOT/f'bin/{tool}.exe',source,destination,ok=False)
+        assert list(destination.iterdir())==[sentinel] and sentinel.read_bytes()==b'keep me'
+
 def verify(game):
     golden=json.loads((ROOT/'tests/fixtures/corpus-hashes.json').read_text())
-    assert digest((ROOT/'openbb/io/palette.d').read_text().encode())==golden['palette_source_sha256'], 'Palette tables changed; review expected rendering policy explicitly'
+    assert digest((ROOT/'source/openbb/io/palette.d').read_text().encode())==golden['palette_source_sha256'], 'Palette tables changed; review expected rendering policy explicitly'
     inputs=sorted([*game.glob('*.BOX'),*game.glob('*.FAT')])
     before={p.name:digest(p.read_bytes()) for p in inputs}
     for name,sha in golden['archives'].items():
@@ -157,10 +189,13 @@ def verify(game):
         bad=output/'broken.box';bad.write_bytes(b'BOX\0\0\0\1\0'+bytes(531))
         for tool in ('unbox','mfbdecoder','m10decoder'):
             run(ROOT/f'bin/{tool}.exe',bad,output/f'bad-{tool}',ok=False)
+        check_cli_failures(output)
         report.update(passed=True,archives=13,entries=len(by_key),sprite_sheets=sprite_count,
                       indexed_frames=sum(len(e.get('frames',[])) for e in golden['entries']),
                       speech_files=speech_count,fat_entries=sum(len(b['payloads']) for b in native['fat']),
-                      corrected_audio_boundaries=golden['audio_corrections'])
+                      corrected_audio_boundaries=golden['audio_corrections'],
+                      mfb_transparency_policy='raw: per-frame first pixel; compressed: frame-zero first pixel',
+                      cli_failure_checks=True)
     finally:
         after={p.name:digest(p.read_bytes()) for p in inputs}
         report['input_hashes']=before;report['inputs_unchanged']=before==after

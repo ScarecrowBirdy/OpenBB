@@ -4,7 +4,7 @@ import openbb.io.boxfile;
 import openbb.io.mfbfile;
 import openbb.io.palette;
 import openbb.tools.cli;
-import png;
+import openbb.io.png;
 import std.stdio : writeln, stderr;
 import std.string : toLower;
 import std.file : mkdir, write;

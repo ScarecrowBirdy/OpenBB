@@ -1,4 +1,4 @@
-module png;
+module openbb.io.png;
 import openbb.common;
 
 T swapBytes(T)(T b)

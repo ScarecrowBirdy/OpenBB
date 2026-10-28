@@ -1,13 +1,13 @@
 /**
  *	
  */
-module openbb.dynamicentity;
+module openbb.world.dynamicentity;
 
 import dsfml.graphics.irendertarget;
 import dsfml.system.vector;
 import openbb.graphics.animation;
-import openbb.map;
-import openbb.entity;
+import openbb.world.map;
+import openbb.world.entity;
 
 
 /// defines the indices where certain animations start
