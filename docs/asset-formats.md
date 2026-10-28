@@ -74,6 +74,9 @@ decoded compressed frame's first pixel shared across that animation. It does not
 use the last frame's key or assume that an RLE marker is always the first decoded
 pixel. `transparencyIndex(frame)` exposes this choice. `opIndex` and sheet export
 both apply it. Unused sheet cells retain the inherited opaque magenta fill.
+`mfb.sheet(Palette.Loading)` and `mfb[index, Palette.Loading]` select a palette per
+call; `mfb[]` and `mfb[index]` default to Main. `getPalette()` returns a read-only
+table. There is no shared active palette or console/filesystem output in decoding.
 
 This is a conclusion from static executable analysis, not a new live screenshot
 comparison. Owner-color translation, seasonal palettes, darkening and surface

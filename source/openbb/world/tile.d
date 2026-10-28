@@ -1,23 +1,4 @@
-/**
- *	
- */
 module openbb.world.tile;
-
-import dsfml.graphics.sprite;
-
-
-enum TileFlags
-{
-	Blocked		= 1 << 0, // completely blocked
-	Buildable	= 1 << 1, // no buildings possible, humans can walk
-	Fertile		= 1 << 2, // crop etc.
-}
-
-///
-struct Tile
-{
-align(1):
-	Sprite	sprite;
-	ushort	resID; /// resource ID
-	ushort	flags;
-}
+/// Prototype flags; these values are NOT the native 12-byte tile record flags.
+enum TileFlags : ushort { Blocked = 1, Buildable = 2, Fertile = 4 }
+struct Tile { ushort resID; ushort flags; }

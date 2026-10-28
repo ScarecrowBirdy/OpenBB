@@ -1,5 +1,5 @@
 /**
- *	
+ *
  */
 module main;
 
@@ -12,7 +12,11 @@ import dsfml.audio.sound;
 
 import openbb.common;
 import openbb.world.dynamicentity;
-import openbb.graphics.animation;
+import openbb.world.geometry;
+import openbb.world.tile;
+import openbb.graphics.scene;
+import renderer;
+import std.random : uniform;
 //import openbb.graphics.gui;
 import openbb.io.palette;
 import openbb.io.boxfile;
@@ -20,7 +24,7 @@ import openbb.io.fatfile;
 import openbb.io.mfbfile;
 import openbb.world.map;
 //import openbb.lua;
-import std.perf;
+import std.datetime.stopwatch : StopWatch, AutoStart;
 //import openbb.quadtree;
 import std.stdio;
 import std.string;
@@ -32,12 +36,12 @@ void main()
 
 	// testing lua
 //	init();
-	
+
 	Vector2f top;
 	FloatRect bound;
 	Shape s;
 	bool mousePressed;
-	
+
 	Input input = window.input;
 
 	Shape tileMarker = new Shape();
@@ -49,7 +53,7 @@ void main()
 	tileMarker.enableOutline = false;
 	tileMarker.outlineThickness = 2;
 	tileMarker.setPosition(77, 60);
-	
+
 	// test ambient sounds
 	uint curSound = 0;
 	auto bbrbankfat = new FATFile("BBRBANK.FAT");
@@ -57,35 +61,38 @@ void main()
 	auto sound = new Sound(buffer);
 
 	sound.play();
-	
-	
+
 	auto videobox = new BOXFile("VIDEO.BOX");
 	auto mfb = new MFBFile(videobox["maptile.MFB"], true);
 	auto tilesheetdata = cast(ubyte[]) mfb[]; // generate a single image with all tiles
 	auto tilesheet = new Image(mfb.spriteSheetWidth*mfb.width, mfb.spriteSheetHeight*mfb.height, tilesheetdata);
 
 //	tilesheet.saveToFile("maptile");
-	
-//	tilesheet.smooth = false; // remove black outlines
-	
-	auto map = new StaggeredMap(25, 70, window, tilesheet);
 
+//	tilesheet.smooth = false; // remove black outlines
+
+	auto map = new Map(25,70);
+    foreach (y; 0..map.height) foreach (x; 0..map.width)
+        map.setTile(x,y,Tile(cast(ushort)uniform(0,mfb.numSprites),0));
+    auto renderer = new DemoRenderer;
+    renderer.addSheet("maptile.MFB",tilesheet,mfb.width,mfb.height,mfb.numSprites);
 
 	// place a woman as a test
 	auto mfb2 = new MFBFile(videobox["woman.MFB"]);
 	auto sheet = cast(ubyte[]) mfb2[];
 	Image testSpriteSheetImage = new Image(mfb2.spriteSheetWidth*mfb2.width, mfb2.spriteSheetHeight*mfb2.height, sheet);
-	auto animation = new Animation(testSpriteSheetImage, mfb2.width, mfb2.height);
-	
-	auto woman = new DynamicEntity(Vector2f(50f, 100f), animation);
-//	woman.walkAnimation = animation;
+    renderer.addSheet("woman.MFB",testSpriteSheetImage,mfb2.width,mfb2.height,mfb2.numSprites);
+    auto woman = new DynamicEntity(1,Position(50,100));
+    woman.resource = "woman.MFB";
+    woman.animation.play(0,mfb2.numSprites,100);
+    map.addEntity(woman);
 
 	// position display
 	Text viewPos = new Text(""c);
 	viewPos.characterSize = 24;
 	viewPos.setPosition(100.f, 200.f);
 	viewPos.color = Color.BLACK;
-	
+
 	Text worldPos = new Text(""c);
 	worldPos.characterSize = 24;
 	worldPos.setPosition(100.f, 220.f);
@@ -98,7 +105,10 @@ void main()
 	fps.move(50.f, 25.f);
 	fps.color = Color.BLACK;
 	uint iFps = 0;
-	auto fpsClock = new PerformanceCounter();
+	auto fpsClock = StopWatch(AutoStart.yes);
+    auto simulationClock = StopWatch(AutoStart.yes);
+    ulong pendingMicroseconds;
+    TileLayout layout;
 	while (window.isOpened())
 	{
 		Event evt;
@@ -135,7 +145,7 @@ void main()
 				case EventType.MouseButtonReleased:
 					if (evt.MouseButton.Button == MouseButtons.Left)
 					{
-							mousePressed = false;   
+							mousePressed = false;
 					}
 					break;
 				case EventType.MouseWheelMoved:
@@ -190,34 +200,38 @@ void main()
 		auto vec = window.convertCoords(input.mouseX, input.mouseY);
 		viewPos.text = std.string.format("Window coordinates: (%d %d)", input.mouseX, input.mouseY);
 		worldPos.text = std.string.format("World coordinates: (%f %f)", vec.x, vec.y);
-		
-		window.clear(Color.WHITE);
-		map.render();
-		auto m = map.convertMapToGlobal(map.convertGlobalToMap(Vector2i(cast(int) vec.x, cast(int) vec.y)));
+
+        pendingMicroseconds += simulationClock.peek.total!"usecs";
+        simulationClock.reset();
+        while (pendingMicroseconds >= map.tickMilliseconds*1000UL) {
+            map.tick(); pendingMicroseconds -= map.tickMilliseconds*1000UL;
+        }
+        auto snapshot = map.snapshot();
+        auto commands = buildScene(snapshot,"maptile.MFB",layout);
+        window.clear(Color.WHITE);
+        renderer.draw(window,commands);
+		auto row = cast(uint)(vec.y < 0 ? 0 : vec.y/layout.rowStep);
+        auto localX = vec.x-(row%2 ? layout.oddRowOffset : 0);
+        auto col = cast(uint)(localX < 0 ? 0 : localX/layout.columnStep);
+        auto m = layout.project(col,row);
 		tileMarker.position = Vector2f(cast(float) m.x, cast(float) m.y+5);
 		window.draw(tileMarker);
 		if (s !is null) window.draw(s);
 
 //		window.draw(testSpriteSheetSprite);
 
-		float dt = window.frameTime * 1000; // in ms
-		
-		woman.update(dt);
-		woman.render(window);
-		
-		fpsClock.stop();
-		if(fpsClock.seconds >= 1)
+		if(fpsClock.peek.total!"seconds" >= 1)
 		{
 			fps.text = std.string.format("%d fps", iFps);
 			iFps = 0;
-			fpsClock.start();
+			fpsClock.reset();
 		}
 		++iFps;
 		window.draw(fps);
 
 //		window.draw(viewPos);
 //		window.draw(worldPos);
-		
+
 		window.display();
 	}
 }

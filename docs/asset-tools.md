@@ -100,8 +100,8 @@ BOX reload atomicity and unknown name bytes, MFB frame/sheet alpha checks, FAT
 metadata and odd sample lengths, PT chunk-size independence and malformed history
 references. The corpus runner also checks unsafe CLI names, existing destinations,
 and conversion failures without successful partial PNG/WAV files. The optional real-corpus test checks the public
-APIs and all three executables. Rendering and simulation are excluded because their
-DSFML dependencies and prototype assumptions have not yet been reconciled.
+APIs and all three executables. Headless world/scene behavior is covered separately
+by `world_tests.d`; the historical DSFML examples remain outside the verified build.
 
 Native case folding for non-ASCII archive names and PT extended tags are not
 established by the current corpus. Any new support should add focused fixtures and preserve the
@@ -127,3 +127,30 @@ before unsigned subtraction. All 1,358 WAV hashes still match the committed
 milestone 1 expectations; no audio baselines were regenerated. Other inherited
 codec arithmetic remains unchanged and is not claimed to have received a complete
 security audit or an original-game acoustic comparison.
+
+## Milestones 4, 5 and 6 validation
+
+The supported build also compiles headless world state, explicit-tick animation,
+renderer-neutral scene construction and a runnable example. World tests check
+arrival, pause/resume/wrap, job transitions, inventory conservation/overflow,
+independent snapshots and differing draw cadences. These are prototype API tests,
+not evidence that the original worker/economy simulation has been ported.
+
+Asset tools share one process/error boundary: 0 for success/help, 1 for operation
+failure, and 2 for usage errors. Converters select matching entries from mixed
+archives and reject a no-match archive before creating output. Errors name the
+archive and failing entry. Native CLI tests exercise the real executables without
+Python or game data, including a later-resource failure after an earlier success.
+
+Readers no longer write BOX dumps or import console logging. MFB conversion uses
+read-only per-call palettes, without a shared selected palette. Interleaved Main,
+Loading and Mission conversions are tested. The eight palette tables were hashed
+before the API edit into `tests/fixtures/palette-hashes.json`; the corpus test now
+checks those table bytes instead of hashing unrelated palette source code. The old
+`palette_source_sha256` remains historical provenance in the unchanged original
+corpus manifest. No asset, frame or audio expected hashes were regenerated.
+
+The complete corpus still passes: 13 archives, 2,653 payloads, 624 PNG sheets,
+5,866 indexed frames, 1,358 speech WAVs and 158 FAT entries. Input hashes remain
+unchanged. See [architecture](architecture.md), [build guide](build.md) and
+[roadmap](roadmap.md) for current implementation boundaries and next steps.

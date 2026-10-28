@@ -2,7 +2,6 @@
 module openbb.io.boxfile;
 import std.exception : enforce;
 import std.file : read;
-import std.stdio : File;
 import std.algorithm.searching : countUntil;
 
 struct EntryTime { ushort year, month, dayofweek, day, hour, minute, second, milliseconds; }
@@ -90,8 +89,4 @@ final class BOXFile {
         auto pos = _entries[index].headerOffset; return _data[pos .. pos+532];
     }
     @property size_t numFiles() const { return _entries.length; }
-    void dump(string filename) const {
-        auto output = File(filename, "w");
-        foreach (e; _entries) output.writefln("%s\t%s\t%d", e.name, e.path, e.size);
-    }
 }

@@ -1,16 +1,57 @@
 module openbb.tools.cli;
 import std.exception : enforce;
 import std.file : exists, isFile;
-import std.path : absolutePath, buildNormalizedPath;
+import std.path : absolutePath, buildNormalizedPath, baseName, extension, stripExtension;
 import std.string : toLower, indexOf;
-import std.stdio : writeln;
+import std.stdio : writeln, stderr;
+import openbb.io.boxfile : BOXFile;
+
+enum ExitCode { success = 0, failure = 1, usage = 2 }
+class UsageException : Exception { this(string message) { super(message); } }
+string usage(string program) { return "Usage: " ~ program ~ " INPUT.BOX NEW_OUTPUT_DIRECTORY"; }
+
+/// Shared process boundary. Readers throw; only the application reports errors.
+int runTool(string[] args, void delegate(Options) action)
+{
+    auto program = args.length ? baseName(args[0]) : "asset-tool";
+    if (help(args)) return ExitCode.success;
+    try { action(options(args)); return ExitCode.success; }
+    catch (UsageException e) { stderr.writeln(program, ": ", e.msg); return ExitCode.usage; }
+    catch (Exception e) {
+        stderr.writeln(program, ": ", args.length > 1 ? args[1] ~ ": " : "", e.msg);
+        return ExitCode.failure;
+    }
+}
+
+struct Selection { size_t index; string name, output; }
+Selection[] selectEntries(BOXFile box, string inputExtension, string outputExtension)
+{
+    Selection[] selected;
+    string[] names;
+    foreach (i; 0..box.numFiles) {
+        auto name = box.entryName(i);
+        if (toLower(extension(name)) != inputExtension) continue;
+        auto output = stripExtension(name) ~ outputExtension;
+        selected ~= Selection(i,name,output); names ~= output;
+    }
+    enforce(selected.length > 0, "No " ~ inputExtension ~ " entries found in archive");
+    validateNames(names);
+    return selected;
+}
+
+void withEntry(size_t index, string name, void delegate() action)
+{
+    import std.conv : to;
+    try { action(); }
+    catch (Exception e) { throw new Exception("entry #" ~ index.to!string ~ " (" ~ name ~ "): " ~ e.msg, e); }
+}
 
 struct Options { string input, output; }
 Options options(string[] args)
 {
-    enforce(args.length == 3, "Usage: " ~ args[0] ~ " INPUT.BOX NEW_OUTPUT_DIRECTORY");
+    if (args.length != 3) throw new UsageException(usage(args.length ? args[0] : "asset-tool"));
     auto result = Options(absolutePath(args[1]), absolutePath(args[2]));
-    enforce(isFile(result.input), "Input is not a file: " ~ result.input);
+    enforce(exists(result.input) && isFile(result.input), "Input is not a file: " ~ result.input);
     enforce(!exists(result.output), "Output already exists; choose a new directory: " ~ result.output);
     return result;
 }
@@ -39,7 +80,7 @@ bool help(string[] args)
 {
     if (args.length == 2 && (args[1] == "--help" || args[1] == "-h"))
     {
-        writeln("Usage: ", args[0], " INPUT.BOX NEW_OUTPUT_DIRECTORY");
+        writeln(usage(args[0]));
         return true;
     }
     return false;

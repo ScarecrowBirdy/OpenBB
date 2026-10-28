@@ -79,7 +79,7 @@ public:
         enforce(index < _frames.length, "MFB frame index out of range");
         enforce(cast(ulong)_frames[index].length * RGBA.sizeof <= maxBytes,
             "MFB RGBA frame exceeds 256 MiB limit");
-        usePalette(paletteIdx);
+        auto palette = getPalette(paletteIdx);
         auto result = new RGBA[_frames[index].length];
         auto key = transparencyIndex(index);
         foreach (i, pixel; _frames[index])
@@ -87,14 +87,15 @@ public:
         return result;
     }
 
-    /// Sheet export uses the selected palette, matching the legacy tool API.
-    RGBA[] opSlice()
+    /// Explicit per-call palette selection; opSlice defaults to the main palette.
+    RGBA[] opSlice() { return sheet(Palette.Main); }
+    RGBA[] sheet(Palette paletteIdx = Palette.Main)
     {
+        auto palette = getPalette(paletteIdx);
         _sheetColumns = cast(uint)(sqrtf(cast(float)_count) + 0.5);
         _sheetRows = cast(uint)ceilf(cast(float)_count / _sheetColumns);
         const pixels = cast(ulong)_width * _height * _sheetColumns * _sheetRows;
         enforce(pixels * RGBA.sizeof <= maxBytes, "MFB RGBA sheet exceeds 256 MiB limit");
-        enforce(palette.length == 256, "Select an MFB palette before sheet export");
         auto result = new RGBA[cast(size_t)pixels];
         size_t cursor;
         foreach (row; 0.._sheetRows)

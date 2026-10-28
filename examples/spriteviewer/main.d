@@ -11,7 +11,6 @@ import openbb.io.mfbfile;
 
 import std.stdio;
 import std.string;
-import std.stream;
 
 void main()
 {
@@ -26,23 +25,11 @@ void main()
     bool mousePressed;
     
     auto videobox = new BOXFile("VIDEO.BOX");
-    /+
-    videobox.dump("boxdump.txt");
-    {
-    auto f = new std.stream.File("videoboxdump.txt", FileMode.Out);
-    scope(exit) f.close();
-    f.write(cast(ubyte[]) "size\t#Sprites\tFlags\tfilename\tdescription\n");
-    for(uint i=0; i < videobox.numFiles; i++)
-    {
-    	auto mfb = new MFBFile(videobox[i]);
-    	f.write(cast(ubyte[]) std.string.format("%dx%d\t\t%d\t\t%b\t\t%s\t\t\n", mfb.width, mfb.height, mfb.numSprites, mfb.flags, videobox.entryName(i)));
-    }
-    }
-    +/
+
 	auto mfb = new MFBFile(videobox[0]);
 	
 	uint curSprite, curSpriteFrame;
-	ubyte curPalette;
+	Palette curPalette;
 	
     Sprite sprite = new Sprite(new Image(mfb.width, mfb.height, cast(ubyte[]) mfb[0]));
 //	writefln(mfb[0]);
@@ -120,19 +107,19 @@ void main()
         					break;
         					
         				case KeyCode.F1:
-        					curPalette = 0;
+                            curPalette = Palette.Main;
         					break;
         				case KeyCode.F2:
-        					curPalette = 1;
+                            curPalette = Palette.Spring;
         					break;
         				case KeyCode.F3:
-        					curPalette = 2;
+                            curPalette = Palette.Mission;
         					break;
         				case KeyCode.F4:
-        					curPalette = 3;
+                            curPalette = Palette.Loading;
         					break;
         				case KeyCode.F5:
-        					curPalette = 4;
+                            curPalette = Palette.Title;
         					break;
         					
         				default:
@@ -165,7 +152,7 @@ void main()
         }
         sprite.position = Vector2f(50.f, 250.f);
 		txtSpritePos.text = std.string.format("Frame %d/%d", curSpriteFrame+1, mfb.numSprites);
-		txtSpriteInfo.text = std.string.format("Size: %dx%d\tFlags: %s | %s | %s", mfb.width, mfb.height, mfb.flags & FLAG_1 ? "FLAG_1":"-", mfb.flags & FLAG_COMPRESSED ? "COMPRESSED":"-", mfb.flags & FLAG_4 ? "FLAG_4":"-");
+		txtSpriteInfo.text = std.string.format("Size: %dx%d\tFlags: %s | %s | %s", mfb.width, mfb.height, mfb.flags & 1 ? "FLAG_1":"-", mfb.flags & 2 ? "COMPRESSED":"-", mfb.flags & 4 ? "FLAG_4":"-");
 		txtBoxPos.text = std.string.format("Sprite %d/%d (%s)", curSprite+1, videobox.numFiles, videobox.entryName(curSprite));
 		window.clear(Color.WHITE);
         window.draw(txt);

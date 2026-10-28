@@ -3,7 +3,7 @@ import openbb.io.boxfile;
 import openbb.io.mfbfile;
 import openbb.io.m10file;
 import openbb.io.fatfile;
-import openbb.io.palette : usePalette, Palette;
+import openbb.io.palette : getPalette, Palette;
 import openbb.tools.cli;
 import std.exception : assertThrown, collectException;
 import std.stdio : writeln;
@@ -129,7 +129,6 @@ unittest
     assert(mfb.transparencyIndex(0) == 7 && mfb.transparencyIndex(1) == 9);
     assert(mfb[0][0].a == 0 && mfb[0][1].a == 255);
     assert(mfb[1][0].a == 0 && mfb[1][1].a == 255);
-    usePalette(Palette.Main);
     auto sheet = mfb[];
     assert(sheet[0].a == 0 && sheet[1].a == 255 && sheet[2].a == 0 && sheet[3].a == 255);
     assertThrown!Exception(mfb[2]);
@@ -211,3 +210,18 @@ unittest
     assert(error !is null && error.msg == "Speech history reference precedes buffer");
 }
 void main() { writeln("Asset regression tests passed (BOX, MFB, FAT, PT and output policy)."); }
+
+unittest {
+    // Interleaved decode calls cannot change another export's palette.
+    ubyte[] header = cast(ubyte[])"MFB101".dup;
+    header ~= [2,0,1,0,0,0,0,0,0,0,1,0];
+    auto a = new MFBFile(header ~ cast(ubyte[])[7,9]);
+    auto b = new MFBFile(header ~ cast(ubyte[])[11,13]);
+    auto main = a.sheet(Palette.Main);
+    auto loading = a.sheet(Palette.Loading);
+    assert(main != loading);
+    b[0,Palette.Mission];
+    assert(a[] == main && a.sheet(Palette.Loading) == loading);
+    assert(a[0,Palette.Main] == main);
+    assertThrown!Exception(getPalette(cast(Palette)255));
+}

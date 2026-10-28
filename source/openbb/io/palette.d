@@ -1,10 +1,6 @@
 module openbb.io.palette;
 
-import std.stdio;
-
 import openbb.common;
-
-RGBA[] palette;
 
 enum Palette
 {
@@ -18,57 +14,21 @@ enum Palette
 	Winter
 }
 
-void usePalette(Palette idx)
+/// Read-only palette selection. No shared active palette or decoder logging.
+const(RGBA)[] getPalette(Palette idx = Palette.Main)
 {
-	switch(idx)
-	{
-		case Palette.Main:
-			palette = PALETTE;
-			break;
-		case Palette.Spring:
-			palette = SPRING_PALETTE;
-			break;
-		case Palette.Mission:
-			palette = MISSIONPALETTE;
-			break;
-		case Palette.Loading:
-			palette = LOADINGPALETTE;
-			break;
-		case Palette.Title:
-			palette = TITLEPALETTE;
-			break;
-		case Palette.Summer:
-			palette = SUMMER_PALETTE;
-			break;
-		case Palette.Autumn:
-			palette = AUTUMN_PALETTE;
-			break;
-		case Palette.Winter:
-			palette = WINTER_PALETTE;
-			break;
-		default:
-			throw new Exception("Invalid palette index");
-	}
+    switch (idx) {
+        case Palette.Main: return PALETTE;
+        case Palette.Spring: return SPRING_PALETTE;
+        case Palette.Mission: return MISSIONPALETTE;
+        case Palette.Loading: return LOADINGPALETTE;
+        case Palette.Title: return TITLEPALETTE;
+        case Palette.Summer: return SUMMER_PALETTE;
+        case Palette.Autumn: return AUTUMN_PALETTE;
+        case Palette.Winter: return WINTER_PALETTE;
+        default: throw new Exception("Invalid palette index");
+    }
 }
-/*
-void loadPalette()
-{
-	auto hFile = new File;
-	try
-	{
-		hFile.open("mix.dat", "rb");
-		hFile.rawRead(palette.ptr, 65536);
-	}
-	catch(Exception e)
-	{
-		writeln(e);
-	}
-	finally
-	{
-		hFile.close();
-	}
-}
-*/
 private:
 
 RGBA[] PALETTE, SPRING_PALETTE, SUMMER_PALETTE, AUTUMN_PALETTE, WINTER_PALETTE, MISSIONPALETTE, LOADINGPALETTE, TITLEPALETTE;

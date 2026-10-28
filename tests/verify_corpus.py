@@ -128,7 +128,8 @@ def check_cli_failures(output):
 
 def verify(game):
     golden=json.loads((ROOT/'tests/fixtures/corpus-hashes.json').read_text())
-    assert digest((ROOT/'source/openbb/io/palette.d').read_text().encode())==golden['palette_source_sha256'], 'Palette tables changed; review expected rendering policy explicitly'
+    expected_palettes=json.loads((ROOT/'tests/fixtures/palette-hashes.json').read_text())
+    assert {name:digest(b''.join(values)) for name,values in palette_tables().items()}==expected_palettes, 'Palette table bytes changed'
     inputs=sorted([*game.glob('*.BOX'),*game.glob('*.FAT')])
     before={p.name:digest(p.read_bytes()) for p in inputs}
     for name,sha in golden['archives'].items():

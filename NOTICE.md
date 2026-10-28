@@ -14,3 +14,9 @@ Corpus hashes and format checks use our separate Beasts & Bumpkins investigation
 including BBTools comparisons. No original game payloads are distributed here.
 The locally downloaded D compiler remains under its own bundled notices/licenses
 and is excluded from Git.
+
+The headless world/scene separation and CLI cleanup are fork maintenance work.
+The original prototype's lineage remains in Git history; its demonstration APIs
+are not represented as recovered native game rules. Executable-derived constants
+and implementation decisions are identified in `docs/architecture.md` and
+`docs/asset-formats.md`, with research references and verification limits.

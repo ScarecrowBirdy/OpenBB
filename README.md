@@ -1,8 +1,9 @@
 # OpenBB
 
 A continuing Beasts & Bumpkins remake project, forked from Trass3r's OpenBB.
-The current maintained build contains **three command-line asset tools**. The
-graphical DSFML application and simulation classes remain an unfinished prototype.
+The maintained build contains **three command-line asset tools and a headless
+world-state example**. Simulation state and scene construction are independent of
+DSFML. The graphical examples and recovered gameplay implementation remain unfinished.
 
 ## Build and test on Windows x64
 
@@ -13,8 +14,8 @@ From this directory, in PowerShell:
 ```
 
 This downloads the official portable **DMD 2.111.0** archive into `.tools/`, checks
-its pinned SHA256, builds all three tools into `bin/`, and runs synthetic regression
-tests. No administrator install or global PATH change is needed. Network access
+its pinned SHA256, builds the tools and headless example into `bin/`, and runs asset, world-state
+and executable CLI regression tests. No administrator install or global PATH change is needed. Network access
 is only needed for the first download; afterward use `./build.ps1 -Test` offline.
 `make.bat -Bootstrap -Test` forwards to the same build from Command Prompt.
 
@@ -50,8 +51,10 @@ Each command requires an input BOX and an **explicit, new output directory**:
 | `mfbdecoder` | One RGBA PNG sprite sheet per MFB entry |
 | `m10decoder` | One 22050 Hz, signed 16-bit mono PCM WAV per M10 entry |
 
-`--help` returns usage. Success returns exit code 0; argument, parsing or output
-errors return a nonzero code. Existing output directories are refused. Filenames
+`--help` returns usage and exit code 0. Incorrect argument counts return 2;
+input, decoding and output failures return 1. Resource failures identify the
+archive, entry index and filename. Converters select `.mfb` or `.m10` entries
+case-insensitively from mixed archives and fail if no matching entries exist. Existing output directories are refused. Filenames
 retain archive case; unsafe names and case-insensitive output collisions are
 rejected before creating the directory. The stored developer paths are never
 used as extraction destinations. The programs do not change the working directory
@@ -94,25 +97,29 @@ the four corrected speech-boundary cases, and limits of the current evidence.
 ## Development direction
 
 - `source/openbb/io/`: BOX, MFB, FAT, M10, palette and PNG support.
-- `source/openbb/graphics/`: inherited rendering and animation code.
-- `source/openbb/world/`: inherited map and entity classes.
+- `source/openbb/graphics/`: renderer-neutral scene construction and draw commands.
+- `source/openbb/world/`: headless map/entity state, explicit ticks and animation.
 - `source/openbb/tools/`: shared CLI argument and destination policy.
 - `tools/`: extraction/conversion entry points and build support scripts.
-- `examples/`: preserved DSFML demo and sprite viewer, outside the verified build.
+- `examples/`: supported headless example plus preserved DSFML demo and sprite viewer.
 - `tests/`: synthetic tests, optional corpus harness and hashes, without game assets.
 - `docs/`: architecture, format contracts and verification evidence.
 - `.tools/`, `bin/`, `build/`: ignored compiler, executables and generated output.
 
-Cleanup milestones 2 and 3 are complete: sources are organized for continued
-work, parser boundaries are checked, and the full local corpus passes. MFB alpha
-conversion now follows the surface color-key setup recovered from the executable;
-all indexed-frame and WAV hashes remain unchanged from milestone 1.
+All six cleanup milestones are complete for the supported headless scope.
+Asset readers and command-line behavior have regression coverage; simulation is
+now testable without a window. Movement, jobs and inventory remain generic
+prototype scaffolding rather than implemented native gameplay rules.
 
-See [architecture and remaining work](docs/architecture.md),
-[asset format contracts](docs/asset-formats.md), and
-[contribution notes](CONTRIBUTING.md). The next cleanup milestone is separating
-simulation state from DSFML and advancing animation through explicit ticks.
-Real `.mis`/`.sav` loading and a static renderer remain future engine work.
+```powershell
+./build.ps1 -Target headless-demo
+./bin/headless-demo.exe
+```
+
+See [build targets and tests](docs/build.md), [architecture and evidence](docs/architecture.md),
+[asset format contracts](docs/asset-formats.md), [roadmap](docs/roadmap.md), and
+[contribution notes](CONTRIBUTING.md). Real mission/save loading, a validated native
+renderer and recovered simulation rules are the next development stages.
 
 Upstream copyright and GPL-3.0-or-later notice are preserved in [LICENSE](LICENSE).
 Decoder attribution and evidence sources are recorded in [NOTICE.md](NOTICE.md).

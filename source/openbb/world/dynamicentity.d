@@ -1,96 +1,32 @@
-/**
- *	
- */
+/// Straight-line prototype movement, not the game's pathfinder/fixed-point rules.
 module openbb.world.dynamicentity;
-
-import dsfml.graphics.irendertarget;
-import dsfml.system.vector;
-import openbb.graphics.animation;
-import openbb.world.map;
 import openbb.world.entity;
+import openbb.world.geometry;
+import std.exception : enforce;
+import std.math : hypot, isFinite;
 
-
-/// defines the indices where certain animations start
-struct WalkAnimations
-{
-align(1):
-	ushort North;
-	ushort NorthEast;
-	ushort East;
-	ushort SouthEast;
-	ushort South;
-	ushort SouthWest;
-	ushort West;
-	ushort NorthWest;
-}
-
-/// dynamic entity's state - esp. used to choose the correct animation
-enum State
-{
-	Idle = 0,
-	Walking,
-	InBuilding,
-	Fighting,
-}
-
-/// an entity that can walk around
-class DynamicEntity : Entity
-{
-protected:
-	Vector2f	_velocity;
-	Vector2f	_headDirection; /// direction the entity is currently facing
-	Vector2f	_target;	/// this entity's walking target
-	Animation	_walkAnim;
-	State		_state;		/// entity's current state
-
+class DynamicEntity : Entity {
+private:
+    Position _target;
+    double _speed;
 public:
-	
-	this(Vector2f pos, Animation walkAnim)
-	{
-		super(pos);
-		
-		walkAnim.position = pos;
-		walkAnim.loopSpeed = 10;
-		walkAnim.play(); // TODO: this needs to be done in walking handling code
-
-		_walkAnim = walkAnim;
-	}
-	
-	/// absolute target coordinates
-	/// TODO: make relative?
-	DynamicEntity walk(Vector2f target)
-	{
-		_target = target;
-		_state	= State.Walking;
-		// TODO: path planning
-		return this;
-	}
-
-	//
-	override DynamicEntity update(float dt)
-	{
-		//_pos = 
-/*			uint frameCount		= _loopEnd - _loopStart;
-		float timePosition	= _clock.getElapsedTime() * _fps;
-		_curFrame = _loopStart + (cast(uint)timePosition) % frameCount; // correct that way 
-*/
-		return this;
-	}
-
-	override DynamicEntity render(IRenderTarget rendertarget)
-	{
-		_walkAnim.update();
-		rendertarget.draw(_walkAnim);
-
-		return this;
-	}
-
-	@property
-	{
-		Vector2f	velocity()				{return _velocity;}
-		void		velocity(Vector2f vel)	{_velocity = vel;}
-		
-		Animation	walkAnimation()				{return _walkAnim;}
-		void		walkAnimation(Animation a)	{_walkAnim = a;}
-	}
+    this(uint id, Position position = Position()) { super(id,position); }
+    void walk(Position target, double unitsPerSecond) {
+        target.validate();
+        enforce(isFinite(unitsPerSecond) && unitsPerSecond > 0, "Invalid movement speed");
+        _target = target; _speed = unitsPerSecond;
+        _state = target == _position ? State.Idle : State.Walking;
+    }
+    void stop() { _state = State.Idle; }
+    override void tick(uint milliseconds) {
+        super.tick(milliseconds);
+        if (_state != State.Walking || milliseconds == 0) return;
+        auto dx = _target.x-_position.x, dy = _target.y-_position.y;
+        auto distance = hypot(dx,dy);
+        auto step = _speed*(milliseconds/1000.0);
+        enforce(isFinite(distance) && isFinite(step), "Movement exceeds numeric range");
+        if (step >= distance) { _position = _target; _state = State.Idle; }
+        else { _position.x += dx/distance*step; _position.y += dy/distance*step; }
+    }
+    @property Position target() const { return _target; }
 }

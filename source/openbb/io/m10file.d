@@ -3,7 +3,6 @@
  */
 module openbb.io.m10file;
 
-import std.stdio;
 import std.exception : enforce;
 
 private

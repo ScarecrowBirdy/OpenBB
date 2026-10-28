@@ -1,48 +1,14 @@
-/**
- *	
- */
 module openbb.world.building;
-
-import dsfml.graphics.renderwindow;
-import dsfml.system.vector;
-import openbb.graphics.animation;
 import openbb.world.staticentity;
-
-///
-class Building : StaticEntity
-{
+import openbb.world.geometry;
+/// Prototype construction state; native construction stages are not implemented.
+enum ConstructionStage { site, toppingOut, complete }
+class Building : StaticEntity {
 private:
-	Animation	_buildAnim;
-	Vector2ub	_buildsize;
+    ConstructionStage _stage;
 public:
-	///
-	this(Vector2f pos, Vector2i size, Animation buildAnim, Vector2ub buildsize)
-	in
-	{
-		assert(buildAnim !is null);
-	}
-	body
-	{
-		super(pos, size);
-		_buildsize = buildsize;
-		_buildAnim = buildAnim;
-		
-		// set up construction site
-	}
-	
-	/// the building is ready for topping out
-	void prepareTopOut()
-	{
-		_buildAnim.curFrame = 0;
-	}
-	
-	void buildFinished()
-	{
-		_buildAnim.curFrame = 1;
-	}
-	
-	void render(RenderWindow target)
-	{
-		_buildAnim.render(target);
-	}
+    this(uint id, Position position, Size footprint) { super(id,position,footprint); }
+    void prepareTopOut() { _stage = ConstructionStage.toppingOut; }
+    void buildFinished() { _stage = ConstructionStage.complete; }
+    @property ConstructionStage stage() const { return _stage; }
 }

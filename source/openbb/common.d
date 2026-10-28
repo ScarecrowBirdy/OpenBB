@@ -1,6 +1,5 @@
 module openbb.common;
 
-public import openbb.log;
 public import openbb.exceptions;
 
 struct RGBA
